@@ -1,51 +1,34 @@
+import "dotenv/config";
 import express from "express";
-import dotenv from "dotenv";
-import { MCPServer } from "@modelcontextprotocol/sdk/server/express";
+import { Server } from "@modelcontextprotocol/sdk/dist/esm/server/express.js";
+import { NotionClient } from "@notionhq/client";
 
-dotenv.config();
-
-const NOTION_KEY = process.env.NOTION_API_KEY;
-if (!NOTION_KEY) {
-  throw new Error("Missing NOTION_API_KEY in Railway Variables.");
-}
+const notion = new NotionClient({ auth: process.env.NOTION_API_KEY });
 
 const app = express();
-app.use(express.json());
+const port = process.env.PORT || 3000;
 
-// Your MCP server instance
-const server = new MCPServer({
-  name: "notion-mcp-server",
-  version: "1.0.0",
-});
-
-// Example MCP tool: fetch Notion DB
-server.tool("notion.query", {
-  description: "Query a Notion database",
-  inputSchema: {
-    type: "object",
-    properties: {
-      database_id: { type: "string" }
-    },
-    required: ["database_id"]
-  },
-  handler: async ({ database_id }) => {
-    const res = await fetch(`https://api.notion.com/v1/databases/${database_id}/query`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${NOTION_KEY}`,
-        "Notion-Version": "2022-06-28",
-        "Content-Type": "application/json"
+// MCP Server Instance
+const mcp = new Server({
+  app,
+  tools: {
+    list_pages: {
+      description: "List pages in a Notion database",
+      inputSchema: {
+        type: "object",
+        properties: {
+          databaseId: { type: "string" }
+        },
+        required: ["databaseId"]
+      },
+      execute: async ({ databaseId }) => {
+        const resp = await notion.databases.query({ database_id: databaseId });
+        return resp.results.map(r => ({ id: r.id, title: r.properties.Title?.title?.[0]?.plain_text }));
       }
-    });
-
-    const data = await res.json();
-    return { ok: true, data };
+    }
   }
 });
 
-// Mount MCP express handler
-app.use("/mcp", server.router);
-
-// Railway must listen on PORT
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("MCP server live on port", PORT));
+app.listen(port, () => {
+  console.log(`🚀 MCP Notion Server running on port ${port}`);
+});
