@@ -1,15 +1,21 @@
-import "dotenv/config";
 import express from "express";
-import { NotionClient } from "@notionhq/client";
-import { createMCPServer } from "./mcp/server.js"; // ← you will create this
-
-const notion = new NotionClient({ auth: process.env.NOTION_API_KEY });
+import { Client } from "@notionhq/client";
+import { createMCPServer } from "./server.js";
 
 const app = express();
-const port = process.env.PORT || 3000;
+app.use(express.json());
 
+// This is required by Railway
+const PORT = process.env.PORT || 8080;
+
+// Load Notion API key from Railway variables
+const notion = new Client({
+  auth: process.env.NOTION_API_KEY,
+});
+
+// Attach MCP routes
 createMCPServer(app, notion);
 
-app.listen(port, () => {
-  console.log(`🚀 MCP Notion Server running on port ${port}`);
+app.listen(PORT, () => {
+  console.log(`MCP server running on port ${PORT}`);
 });
