@@ -1,80 +1,64 @@
-import "dotenv/config";
-import express from "express";
-import { Client } from "@notionhq/client";
-import { MCPServer } from "@modelcontextprotocol/sdk/server";
-import { Tool } from "@modelcontextprotocol/sdk";
+import 'dotenv/config';
+import express from 'express';
+import { Client } from '@notionhq/client';
+import { Server } from '@modelcontextprotocol/sdk/server/express.js';
 
-const app = express();
-app.use(express.json());
-
-// ---- Notion client ----
 const notion = new Client({
   auth: process.env.NOTION_API_KEY
 });
 
-// ---- MCP Server Setup ----
-const mcp = new MCPServer({
-  name: "notion-mcp-server",
-  version: "1.0.0"
-});
+const app = express();
+app.use(express.json());
 
-// ---- MCP Tool: create_notion_page ----
-mcp.addTool(
-  new Tool({
-    name: "create_notion_page",
-    description: "Create a Notion page in a given database.",
-    input: {
-      type: "object",
-      properties: {
-        database_id: { type: "string" },
-        title: { type: "string" },
-        content: { type: "string" }
-      },
-      required: ["database_id", "title"]
+// MCP server instance
+const server = new Server();
+
+// MCP Tool: query a database
+server.tool('notion_query', {
+  description: 'Query a Notion database.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      database_id: { type: 'string' },
+      filter: { type: 'object' }
     },
-    output: {
-      type: "object",
-      properties: {
-        page_id: { type: "string" }
-      }
+    required: ['database_id']
+  },
+  execute: async ({ database_id, filter }) => {
+    const response = await notion.databases.query({
+      database_id,
+      filter: filter || undefined
+    });
+    return { results: response.results };
+  }
+});
+
+// MCP Tool: create a page
+server.tool('notion_create_page', {
+  description: 'Create a page in a Notion database.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      database_id: { type: 'string' },
+      properties: { type: 'object' }
     },
-    handler: async ({ database_id, title, content }) => {
-      const response = await notion.pages.create({
-        parent: { database_id },
-        properties: {
-          Name: {
-            title: [{ text: { content: title } }]
-          }
-        },
-        children:
-          content
-            ? [
-                {
-                  object: "block",
-                  type: "paragraph",
-                  paragraph: {
-                    rich_text: [{ text: { content } }]
-                  }
-                }
-              ]
-            : []
-      });
-
-      return { page_id: response.id };
-    }
-  })
-);
-
-// ---- Express endpoint so Railway can keep service alive ----
-app.get("/", (req, res) => {
-  res.json({ status: "OK", service: "notion-mcp-server" });
+    required: ['database_id', 'properties']
+  },
+  execute: async ({ database_id, properties }) => {
+    const response = await notion.pages.create({
+      parent: { database_id },
+      properties
+    });
+    return { id: response.id };
+  }
 });
 
-// ---- Start both servers ----
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("HTTP health server running on port", PORT);
+// Bind MCP server to /mcp
+app.use('/mcp', server.router);
+
+// Railway will use this port automatically
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Notion MCP Server running on port ${port}`);
 });
 
-mcp.listen();
-console.log("MCP server running");
