@@ -1,11 +1,10 @@
 export function createMCPServer(app, notion) {
-
-  // Basic test endpoint
+  // Test endpoint
   app.get("/", (req, res) => {
     res.json({ status: "ok", mcp: true });
   });
 
-  // List pages in a database
+  // List pages from a Notion DB
   app.post("/list-pages", async (req, res) => {
     const { databaseId } = req.body;
 
@@ -13,9 +12,7 @@ export function createMCPServer(app, notion) {
       return res.status(400).json({ error: "databaseId required" });
 
     try {
-      const data = await notion.databases.query({
-        database_id: databaseId,
-      });
+      const data = await notion.databases.query({ database_id: databaseId });
 
       res.json(
         data.results.map((page) => ({
@@ -26,10 +23,7 @@ export function createMCPServer(app, notion) {
       );
     } catch (err) {
       console.error(err);
-      res.status(500).json({
-        error: "Failed to query Notion",
-        details: err.message,
-      });
+      res.status(500).json({ error: "Error querying Notion" });
     }
   });
 }
