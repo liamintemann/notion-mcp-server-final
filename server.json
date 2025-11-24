@@ -1,0 +1,18 @@
+{
+  "name": "notion-mcp-server",
+  "version": "1.0.0",
+  "description": "Notion MCP server for OpenAI Agent Builder",
+  "entry": "index.js",
+  "commands": {
+    "queryDatabase": {
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "databaseId": { "type": "string" },
+          "filter": { "type": "object" }
+        },
+        "required": ["databaseId"]
+      }
+    }
+  }
+}
