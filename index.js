@@ -1,64 +1,85 @@
-import 'dotenv/config';
-import express from 'express';
-import { Client } from '@notionhq/client';
-import { Server } from '@modelcontextprotocol/sdk/server/express.js';
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import { Client } from "@notionhq/client";
+import { MCPServer, Tool, ServerTransportExpress } from "@modelcontextprotocol/sdk";
 
-const notion = new Client({
-  auth: process.env.NOTION_API_KEY
-});
+dotenv.config();
 
+const NOTION_API_KEY = process.env.NOTION_API_KEY;
+if (!NOTION_API_KEY) {
+  console.error("❌ Missing NOTION_API_KEY environment variable!");
+  process.exit(1);
+}
+
+const notion = new Client({ auth: NOTION_API_KEY });
+
+// -------------------------------
+// Define MCP Tools
+// -------------------------------
+const tools = {
+  echo: new Tool({
+    name: "echo",
+    description: "Returns whatever input was sent.",
+    parameters: {
+      type: "object",
+      properties: { text: { type: "string" } },
+      required: ["text"]
+    },
+    execute: async ({ text }) => {
+      return { text };
+    }
+  }),
+
+  notion_query: new Tool({
+    name: "notion_query",
+    description: "Query a Notion database with no filter.",
+    parameters: {
+      type: "object",
+      properties: {
+        database_id: { type: "string" }
+      },
+      required: ["database_id"]
+    },
+    execute: async ({ database_id }) => {
+      const response = await notion.databases.query({ database_id });
+      return { results: response.results };
+    }
+  }),
+
+  notion_page: new Tool({
+    name: "notion_page",
+    description: "Retrieve a Notion page by ID.",
+    parameters: {
+      type: "object",
+      properties: {
+        page_id: { type: "string" }
+      },
+      required: ["page_id"]
+    },
+    execute: async ({ page_id }) => {
+      const page = await notion.pages.retrieve({ page_id });
+      return { page };
+    }
+  })
+};
+
+// -------------------------------
+// Setup MCP server
+// -------------------------------
 const app = express();
+app.use(cors());
 app.use(express.json());
 
-// MCP server instance
-const server = new Server();
+const server = new MCPServer({ tools });
 
-// MCP Tool: query a database
-server.tool('notion_query', {
-  description: 'Query a Notion database.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      database_id: { type: 'string' },
-      filter: { type: 'object' }
-    },
-    required: ['database_id']
-  },
-  execute: async ({ database_id, filter }) => {
-    const response = await notion.databases.query({
-      database_id,
-      filter: filter || undefined
-    });
-    return { results: response.results };
-  }
+// Bind Express → MCP transport
+new ServerTransportExpress({ app, server });
+
+// Health check for Railway logs
+app.get("/", (req, res) => {
+  res.send("Notion MCP Server running.");
 });
 
-// MCP Tool: create a page
-server.tool('notion_create_page', {
-  description: 'Create a page in a Notion database.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      database_id: { type: 'string' },
-      properties: { type: 'object' }
-    },
-    required: ['database_id', 'properties']
-  },
-  execute: async ({ database_id, properties }) => {
-    const response = await notion.pages.create({
-      parent: { database_id },
-      properties
-    });
-    return { id: response.id };
-  }
-});
-
-// Bind MCP server to /mcp
-app.use('/mcp', server.router);
-
-// Railway will use this port automatically
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Notion MCP Server running on port ${port}`);
-});
-
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 MCP server running on ${PORT}`));
