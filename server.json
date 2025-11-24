@@ -1,18 +1,20 @@
-{
-  "name": "notion-mcp-server",
-  "version": "1.0.0",
-  "description": "Notion MCP server for OpenAI Agent Builder",
-  "entry": "index.js",
-  "commands": {
-    "queryDatabase": {
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "databaseId": { "type": "string" },
-          "filter": { "type": "object" }
-        },
-        "required": ["databaseId"]
-      }
-    }
-  }
+export function createMCPServer(app, notion) {
+  app.get("/", (req, res) => {
+    res.json({ status: "ok", mcp: true });
+  });
+
+  app.post("/list-pages", async (req, res) => {
+    const { databaseId } = req.body;
+
+    if (!databaseId) return res.status(400).json({ error: "databaseId required" });
+
+    const data = await notion.databases.query({ database_id: databaseId });
+
+    res.json(
+      data.results.map(page => ({
+        id: page.id,
+        title: page.properties?.Name?.title?.[0]?.plain_text || "Untitled"
+      }))
+    );
+  });
 }
