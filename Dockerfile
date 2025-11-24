@@ -3,11 +3,14 @@ FROM node:18
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --production
+RUN npm install
 
 COPY . .
 
-EXPOSE 3000
-CMD ["npm", "start"]
+EXPOSE 8080
+ENV PORT=8080
+
+CMD ["node", "index.js"]
+
 
 
